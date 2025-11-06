@@ -13,35 +13,156 @@
     />
   </head>
   <body>
-    <div class="container">
-      <header>
-        <h1>Painel de Configuração de Regras</h1>
-        <p>Arraste e solte uma regra por vez para ordenar e ao final clique em salvar.</p>
-      </header>
-
-      <main>
-        <aside class="ruleset-sidebar">
-          <h2>Conjuntos de Regras</h2>
-          <ul id="ruleset-list">
-          </ul>
-        </aside>
-
-        <section class="rules-display">
-          <h2 id="current-ruleset-name">Selecione um conjunto</h2>
-          <p id="current-ruleset-description"></p>
-          <ul
-            id="rule-list"
-            class="sortable-list"
-          >
-          </ul>
+    <div
+      id="role-selection-screen"
+      class="role-selection-container"
+    >
+      <div class="role-selection-content">
+        <h1>Protótipo Orquestrador de Leads</h1>
+        <p>Selecione seu tipo de acesso:</p>
+        <div class="role-buttons">
           <button
-            id="save-order-btn"
-            class="btn-save-order hidden"
+            id="admin-btn"
+            class="role-btn role-btn-admin"
           >
-            Salvar Ordem
+            <span class="role-icon">👤</span>
+            <span class="role-label">Administrador</span>
+            <span class="role-desc"
+              >Acesso completo a todas as funcionalidades</span
+            >
           </button>
-        </section>
-      </main>
+          <button
+            id="manager-btn"
+            class="role-btn role-btn-manager"
+          >
+            <span class="role-icon">📋</span>
+            <span class="role-label">Gestor</span>
+            <span class="role-desc"
+              >Acesso limitado à edição de parâmetros</span
+            >
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="main-app"
+      class="main-app-hidden"
+    >
+      <div class="container">
+        <header>
+          <div class="header-top">
+            <h1>Painel de Configuração de Regras</h1>
+            <div class="header-controls">
+              <span
+                id="user-role-display"
+                class="user-role-badge"
+                >Admin</span
+              >
+              <button
+                id="logout-btn"
+                class="btn-logout"
+              >
+                Sair
+              </button>
+            </div>
+          </div>
+          <p id="info-text">
+            Arraste e solte uma regra por vez para ordenar e ao final clique em
+            salvar.
+          </p>
+        </header>
+
+        <main>
+          <section
+            id="tabs-container"
+            class="tabs-container"
+          >
+            <div class="tabs-nav">
+              <button
+                class="tab-btn active"
+                data-tab="rules"
+              >
+                Conjunto de Regras
+              </button>
+              <button
+                class="tab-btn"
+                data-tab="templates"
+              >
+                Templates
+              </button>
+            </div>
+
+            <div
+              id="rules-tab"
+              class="tab-content active"
+            >
+              <div class="rules-tab-layout">
+                <aside class="ruleset-sidebar">
+                  <div class="sidebar-actions">
+                    <button
+                      id="create-ruleset-btn"
+                      class="btn-create-ruleset btn-action-hidden"
+                    >
+                      + Novo Conjunto
+                    </button>
+                  </div>
+                  <ul id="ruleset-list"></ul>
+                </aside>
+
+                <section class="rules-display">
+                  <div class="rules-header">
+                    <div class="rules-info">
+                      <h3 id="current-ruleset-name">Selecione um conjunto</h3>
+                      <p id="current-ruleset-description"></p>
+                    </div>
+                    <div class="rules-actions-header">
+                      <button
+                        id="create-rule-btn"
+                        class="btn-create-rule btn-action-hidden"
+                      >
+                        + Nova Regra
+                      </button>
+                    </div>
+                  </div>
+                  <ul
+                    id="rule-list"
+                    class="sortable-list"
+                  ></ul>
+                  <button
+                    id="save-order-btn"
+                    class="btn-save-order"
+                    disabled
+                  >
+                    Salvar Ordem
+                  </button>
+                </section>
+              </div>
+            </div>
+
+            <div
+              id="templates-tab"
+              class="tab-content tab-hidden"
+            >
+              <section class="templates-display">
+                <div class="templates-header">
+                  <h2>Gerenciar Templates</h2>
+                  <button
+                    id="create-template-btn"
+                    class="btn-create-template btn-action-hidden"
+                  >
+                    + Novo Template
+                  </button>
+                </div>
+                <ul
+                  id="template-list"
+                  class="template-list"
+                ></ul>
+              </section>
+            </div>
+          </section>
+        </main>
+      </div>
     </div>
 
     <div
@@ -50,17 +171,52 @@
     >
       <div class="modal-content">
         <header class="modal-header">
-          <h3 id="modal-title">Editar Regra</h3>
+          <h3 id="modal-title">Editar</h3>
           <span class="close-button">&times;</span>
         </header>
-        <div id="modal-body">
-        </div>
+        <div id="modal-body"></div>
         <footer class="modal-footer">
           <button
             id="save-params-btn"
             class="btn-primary"
           >
             Salvar
+          </button>
+          <button
+            id="cancel-modal-btn"
+            class="btn-secondary"
+          >
+            Cancelar
+          </button>
+        </footer>
+      </div>
+    </div>
+
+    <div
+      id="confirmation-modal"
+      class="modal"
+    >
+      <div class="modal-content modal-small">
+        <header class="modal-header">
+          <h3 id="confirmation-title">Confirmar</h3>
+          <span class="close-button">&times;</span>
+        </header>
+        <div
+          id="confirmation-message"
+          class="modal-body"
+        ></div>
+        <footer class="modal-footer">
+          <button
+            id="confirm-yes-btn"
+            class="btn-primary"
+          >
+            Sim
+          </button>
+          <button
+            id="confirm-no-btn"
+            class="btn-secondary"
+          >
+            Não
           </button>
         </footer>
       </div>
