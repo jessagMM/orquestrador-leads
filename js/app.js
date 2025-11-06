@@ -121,7 +121,7 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       {
         id: 3,
-        name: 'Recuperação de Carrinho',
+        name: 'Recuperador Carrinho',
         slug: 'cart-recovery',
         description: 'Conjunto de regras do recuperador carrinho',
       },
