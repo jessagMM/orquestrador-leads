@@ -182,17 +182,59 @@ document.addEventListener('DOMContentLoaded', () => {
     rulesetList.innerHTML = '';
     mockData.rulesets.forEach(ruleset => {
       const li = document.createElement('li');
-      li.textContent = ruleset.name;
+      li.innerHTML = `
+        <span class="ruleset-name">${ruleset.name}</span>
+        <button class="edit-ruleset-btn" data-ruleset-id="${ruleset.id}" title="Editar nome">&#9998;</button>
+      `;
       li.dataset.id = ruleset.id;
-      li.addEventListener('click', () => {
+
+      const rulesetName = li.querySelector('.ruleset-name');
+      rulesetName.addEventListener('click', () => {
         document
           .querySelectorAll('#ruleset-list li')
           .forEach(item => item.classList.remove('active'));
         li.classList.add('active');
         renderRules(ruleset.id);
       });
+
       rulesetList.appendChild(li);
     });
+
+    addEditRulesetListeners();
+  }
+
+  function addEditRulesetListeners() {
+    document.querySelectorAll('.edit-ruleset-btn').forEach(button => {
+      button.addEventListener('click', e => {
+        e.stopPropagation();
+        const rulesetId = parseInt(e.currentTarget.dataset.rulesetId, 10);
+        editRulesetName(rulesetId);
+      });
+    });
+  }
+
+  function editRulesetName(rulesetId) {
+    const ruleset = mockData.rulesets.find(rs => rs.id === rulesetId);
+    const newName = prompt(
+      'Digite o novo nome para o conjunto de regras:',
+      ruleset.name
+    );
+
+    if (newName && newName.trim() !== '') {
+      ruleset.name = newName.trim();
+      console.log(`Ruleset ID ${rulesetId} renomeado para: ${newName}`);
+
+      renderRulesets();
+
+      // Se este ruleset estiver ativo, atualizar o nome exibido
+      const activeRuleset = document.querySelector('#ruleset-list li.active');
+      if (
+        activeRuleset &&
+        parseInt(activeRuleset.dataset.id, 10) === rulesetId
+      ) {
+        activeRuleset.click();
+      }
+    }
   }
 
   function renderRules(rulesetId) {
@@ -209,9 +251,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const li = document.createElement('li');
       li.className = 'rule-item';
       li.dataset.id = rule.id;
-      li.draggable = true;
 
       const template = mockData.templates.find(t => t.id === rule.template_id);
+      const isTerminator = template.terminator === 1;
+
+      // Regras com terminator true não podem ser reordenadas
+      li.draggable = !isTerminator;
+      if (isTerminator) {
+        li.classList.add('non-draggable');
+      }
+
       const hasParams = mockData.fields.some(
         f => f.template_id === template.id
       );
@@ -227,6 +276,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         ? `<button class="edit-btn" data-rule-id="${rule.id}">&#9998;</button>`
                         : ''
                     }
+                    ${
+                      !isTerminator
+                        ? `<button class="delete-btn" data-rule-id="${rule.id}" title="Remover regra">&#128465;</button>`
+                        : ''
+                    }
                     <label class="switch">
                         <input type="checkbox" ${rule.enabled ? 'checked' : ''}>
                         <span class="slider"></span>
@@ -238,6 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     addDragAndDropListeners();
     addEditButtonListeners();
+    addDeleteButtonListeners();
   }
 
   function openModal(ruleId) {
@@ -259,21 +314,59 @@ document.addEventListener('DOMContentLoaded', () => {
         );
         const formGroup = document.createElement('div');
         formGroup.className = 'form-group';
-        formGroup.innerHTML = `
-                    <label for="param-${field.id}">${field.name}</label>
-                    <input type="${field.type}" id="param-${field.id}" name="${
-          field.slug
-        }" value="${parameter ? parameter.value : ''}" data-param-id="${
-          parameter ? parameter.id : ''
-        }">
-                `;
+
+        let inputHTML = '';
+        if (field.type === 'boolean') {
+          const isChecked =
+            (parameter && parameter.value === 'true') ||
+            (parameter && parameter.value === '1');
+          inputHTML = `
+            <label class="checkbox-label">
+              <input type="checkbox" id="param-${field.id}" name="${
+            field.slug
+          }" ${isChecked ? 'checked' : ''} data-param-id="${
+            parameter ? parameter.id : ''
+          }" data-field-id="${field.id}">
+              <span>${field.name}</span>
+            </label>
+            <button type="button" class="remove-field-btn" data-field-id="${
+              field.id
+            }">Remover campo</button>
+          `;
+        } else {
+          inputHTML = `
+            <label for="param-${field.id}">${field.name}</label>
+            <input type="${field.type}" id="param-${field.id}" name="${
+            field.slug
+          }" value="${parameter ? parameter.value : ''}" data-param-id="${
+            parameter ? parameter.id : ''
+          }" data-field-id="${field.id}">
+            <button type="button" class="remove-field-btn" data-field-id="${
+              field.id
+            }">Remover campo</button>
+          `;
+        }
+
+        formGroup.innerHTML = inputHTML;
         form.appendChild(formGroup);
       });
+
+      // Adicionar botão para criar novo campo
+      const addFieldButton = document.createElement('button');
+      addFieldButton.type = 'button';
+      addFieldButton.className = 'btn-add-field';
+      addFieldButton.textContent = '+ Adicionar campo';
+      addFieldButton.onclick = () => showAddFieldForm(rule.id, template.id);
+      form.appendChild(addFieldButton);
+
       modalBody.appendChild(form);
     }
 
     saveParamsBtn.onclick = () => saveParameters(ruleId);
     modal.style.display = 'block';
+
+    // Adicionar listeners para remover campos
+    addRemoveFieldListeners();
   }
 
   function closeModal() {
@@ -282,19 +375,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function saveParameters(ruleId) {
     console.log(`Salvando parâmetros para a regra ID: ${ruleId}`);
-    const inputs = modalBody.querySelectorAll('input');
+    const inputs = modalBody.querySelectorAll('input[data-param-id]');
     inputs.forEach(input => {
       const paramId = parseInt(input.dataset.paramId, 10);
-      const value = input.value;
-      const parameter = mockData.parameters.find(p => p.id === paramId);
-      if (parameter) {
-        console.log(
-          `Atualizando Parâmetro ID: ${paramId}, Novo Valor: ${value}`
-        );
-        parameter.value = value;
+      let value;
+
+      if (input.type === 'checkbox') {
+        value = input.checked ? 'true' : 'false';
+      } else {
+        value = input.value;
+      }
+
+      if (paramId) {
+        const parameter = mockData.parameters.find(p => p.id === paramId);
+        if (parameter) {
+          console.log(
+            `Atualizando Parâmetro ID: ${paramId}, Novo Valor: ${value}`
+          );
+          parameter.value = value;
+        }
       }
     });
-    alert('Parâmetros salvos com sucesso! (simulado)');
+    alert('Parâmetros salvos com sucesso!');
     closeModal();
   }
 
@@ -309,6 +411,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function handleDragStart(e) {
+    const ruleId = parseInt(this.dataset.id, 10);
+    const rule = mockData.rules.find(r => r.id === ruleId);
+    const template = mockData.templates.find(t => t.id === rule.template_id);
+
+    if (template.terminator === 1) {
+      e.preventDefault();
+      alert(
+        'Esta regra não pode ser reordenada pois possui um template com terminator ativado.'
+      );
+      return;
+    }
+
     draggedItem = this;
     setTimeout(() => {
       this.classList.add('dragging');
@@ -323,6 +437,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       ruleList.insertBefore(draggedItem, afterElement);
     }
+    // Mostrar o botão salvar assim que houver movimento
+    saveOrderBtn.classList.remove('hidden');
   }
 
   function getDragAfterElement(container, y) {
@@ -364,7 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     console.log(
-      'Nova ordem salva (simulado):',
+      'Nova ordem salva:',
       mockData.rules.filter(r => orderedIds.includes(r.id))
     );
     alert('Ordem salva com sucesso!');
@@ -386,6 +502,166 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function addDeleteButtonListeners() {
+    document.querySelectorAll('.delete-btn').forEach(button => {
+      button.addEventListener('click', e => {
+        const ruleId = parseInt(e.currentTarget.dataset.ruleId, 10);
+        deleteRule(ruleId);
+      });
+    });
+  }
+
+  function deleteRule(ruleId) {
+    if (confirm('Tem certeza que deseja excluir esta regra?')) {
+      const ruleIndex = mockData.rules.findIndex(r => r.id === ruleId);
+      if (ruleIndex !== -1) {
+        mockData.rules.splice(ruleIndex, 1);
+
+        // Remover parâmetros associados à regra
+        mockData.parameters = mockData.parameters.filter(
+          p => p.rule_id !== ruleId
+        );
+
+        console.log(`Regra ID ${ruleId} removida com sucesso`);
+
+        // Re-renderizar as regras
+        const activeRulesetId = parseInt(
+          document.querySelector('#ruleset-list li.active').dataset.id,
+          10
+        );
+        renderRules(activeRulesetId);
+      }
+    }
+  }
+
+  function showAddFieldForm(ruleId, templateId) {
+    const addFieldDiv = document.createElement('div');
+    addFieldDiv.className = 'add-field-form';
+    addFieldDiv.innerHTML = `
+      <h4>Adicionar novo campo</h4>
+      <div class="form-group">
+        <label for="new-field-name">Nome do campo</label>
+        <input type="text" id="new-field-name" placeholder="Ex: Novo parâmetro">
+      </div>
+      <div class="form-group">
+        <label for="new-field-type">Tipo do campo</label>
+        <select id="new-field-type">
+          <option value="text">Texto</option>
+          <option value="number">Número</option>
+          <option value="boolean">Booleano</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-primary" id="confirm-add-field">Adicionar</button>
+        <button type="button" class="btn-secondary" id="cancel-add-field">Cancelar</button>
+      </div>
+    `;
+
+    modalBody.appendChild(addFieldDiv);
+
+    document.getElementById('confirm-add-field').onclick = () => {
+      const fieldName = document.getElementById('new-field-name').value;
+      const fieldType = document.getElementById('new-field-type').value;
+
+      if (!fieldName) {
+        alert('Por favor, informe o nome do campo');
+        return;
+      }
+
+      addNewField(ruleId, templateId, fieldName, fieldType);
+    };
+
+    document.getElementById('cancel-add-field').onclick = () => {
+      addFieldDiv.remove();
+    };
+  }
+
+  function addNewField(ruleId, templateId, fieldName, fieldType) {
+    // Criar novo field
+    const newFieldId = Math.max(...mockData.fields.map(f => f.id), 0) + 1;
+    const fieldSlug = fieldName.toLowerCase().replace(/\s+/g, '-');
+
+    const newField = {
+      id: newFieldId,
+      name: fieldName,
+      slug: fieldSlug,
+      type: fieldType,
+      template_id: templateId,
+    };
+
+    mockData.fields.push(newField);
+
+    // Criar novo parameter associado ao field e à rule
+    const newParamId = Math.max(...mockData.parameters.map(p => p.id), 0) + 1;
+    const defaultValue = fieldType === 'boolean' ? 'false' : '';
+
+    const newParameter = {
+      id: newParamId,
+      value: defaultValue,
+      rule_id: ruleId,
+      field_id: newFieldId,
+    };
+
+    mockData.parameters.push(newParameter);
+
+    console.log('Novo campo adicionado:', newField);
+    console.log('Novo parâmetro criado:', newParameter);
+
+    // Fechar modal e reabrir para mostrar o novo campo
+    closeModal();
+    setTimeout(() => openModal(ruleId), 100);
+  }
+
+  function addRemoveFieldListeners() {
+    document.querySelectorAll('.remove-field-btn').forEach(button => {
+      button.addEventListener('click', e => {
+        const fieldId = parseInt(e.currentTarget.dataset.fieldId, 10);
+        removeField(fieldId);
+      });
+    });
+  }
+
+  function removeField(fieldId) {
+    if (
+      confirm(
+        'Tem certeza que deseja remover este campo? O parâmetro associado também será removido.'
+      )
+    ) {
+      // Remover field
+      const fieldIndex = mockData.fields.findIndex(f => f.id === fieldId);
+      if (fieldIndex !== -1) {
+        mockData.fields.splice(fieldIndex, 1);
+      }
+
+      // Remover parameters associados ao field
+      mockData.parameters = mockData.parameters.filter(
+        p => p.field_id !== fieldId
+      );
+
+      console.log(
+        `Campo ID ${fieldId} e seus parâmetros removidos com sucesso`
+      );
+
+      // Reabrir o modal para atualizar a visualização
+      const currentRuleId = getCurrentEditingRuleId();
+      if (currentRuleId) {
+        closeModal();
+        setTimeout(() => openModal(currentRuleId), 100);
+      }
+    }
+  }
+
+  function getCurrentEditingRuleId() {
+    const titleText = modalTitle.textContent;
+    const match = titleText.match(/Editar: (.+)/);
+    if (match) {
+      const ruleName = match[1];
+      const rule = mockData.rules.find(r => r.name === ruleName);
+      return rule ? rule.id : null;
+    }
+    return null;
+  }
+
   closeModalBtn.addEventListener('click', closeModal);
   window.addEventListener('click', event => {
     if (event.target === modal) {
@@ -395,7 +671,23 @@ document.addEventListener('DOMContentLoaded', () => {
   saveOrderBtn.addEventListener('click', saveNewOrder);
 
   renderRulesets();
-  if (rulesetList.firstChild) {
-    rulesetList.firstChild.click();
-  }
+
+  // Selecionar o conjunto "Orçamento" (id: 1) por padrão após renderização
+  setTimeout(() => {
+    const defaultRuleset = document.querySelector(
+      '#ruleset-list li[data-id="1"]'
+    );
+    if (defaultRuleset) {
+      const rulesetName = defaultRuleset.querySelector('.ruleset-name');
+      if (rulesetName) {
+        rulesetName.click();
+      }
+    } else if (rulesetList.firstChild) {
+      const firstRulesetName =
+        rulesetList.firstChild.querySelector('.ruleset-name');
+      if (firstRulesetName) {
+        firstRulesetName.click();
+      }
+    }
+  }, 0);
 });
