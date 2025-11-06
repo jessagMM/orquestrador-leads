@@ -711,7 +711,8 @@ input:checked + .slider:before {
   font-size: 1.4em;
 }
 
-.close-button {
+.close-button,
+.close-button-field {
   color: #aaa;
   font-size: 28px;
   font-weight: bold;
@@ -719,7 +720,9 @@ input:checked + .slider:before {
 }
 
 .close-button:hover,
-.close-button:focus {
+.close-button:focus,
+.close-button-field:hover,
+.close-button-field:focus {
   color: var(--text-color);
 }
 
@@ -888,4 +891,55 @@ main {
   display: flex;
   gap: 30px;
   flex-grow: 1;
+}
+
+/* Tabela de fields dentro do modal de template */
+.fields-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 0.9em;
+}
+.fields-table th,
+.fields-table td {
+  border: 1px solid var(--border-color);
+  padding: 8px 10px;
+  text-align: left;
+}
+.fields-table th {
+  background-color: var(--background-color);
+  font-weight: 600;
+}
+.fields-table tbody tr:hover {
+  background-color: #f1f3f5;
+}
+.fields-table button.edit-field-btn,
+.fields-table button.delete-field-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1em;
+  padding: 0 4px;
+  margin: 0 2px;
+}
+
+.fields-table button.edit-field-btn {
+  color: var(--primary-color);
+}
+
+.fields-table button.delete-field-btn {
+  color: var(--danger-color);
+}
+
+.fields-table button.edit-field-btn:hover,
+.fields-table button.delete-field-btn:hover {
+  filter: brightness(0.85);
+}
+
+#field-modal {
+  z-index: 1100;
+}
+
+#field-modal .modal-content {
+  margin: 15% auto;
 }

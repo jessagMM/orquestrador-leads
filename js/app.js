@@ -260,7 +260,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function canToggleRule() {
-    return currentUserRole === 'admin';
+    // Gestor também pode ativar/desativar regra
+    return currentUserRole === 'admin' || currentUserRole === 'manager';
   }
 
   function updateUIPermissions() {
@@ -380,6 +381,10 @@ document.addEventListener('DOMContentLoaded', () => {
           <input type="text" id="ruleset-name" name="name" value="${ruleset.name}" required>
         </div>
         <div class="form-group">
+          <label>Slug</label>
+          <input type="text" value="${ruleset.slug}" disabled>
+        </div>
+        <div class="form-group">
           <label for="ruleset-description">Descrição</label>
           <textarea id="ruleset-description" name="description">${ruleset.description}</textarea>
         </div>
@@ -409,6 +414,10 @@ document.addEventListener('DOMContentLoaded', () => {
           <input type="text" id="new-ruleset-name" name="name" required>
         </div>
         <div class="form-group">
+          <label for="new-ruleset-slug">Slug (opcional)</label>
+          <input type="text" id="new-ruleset-slug" name="slug" placeholder="ex: cart-recovery">
+        </div>
+        <div class="form-group">
           <label for="new-ruleset-description">Descrição</label>
           <textarea id="new-ruleset-description" name="description"></textarea>
         </div>
@@ -426,10 +435,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const newId = Math.max(...mockData.rulesets.map(r => r.id), 0) + 1;
+      const providedSlug = document
+        .getElementById('new-ruleset-slug')
+        .value.trim();
       mockData.rulesets.push({
         id: newId,
         name: name.trim(),
-        slug: name.toLowerCase().replace(/\s+/g, '-'),
+        slug: providedSlug || name.toLowerCase().replace(/\s+/g, '-'),
         description: description.trim(),
       });
 
@@ -479,10 +491,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .filter(rule => rule.ruleset_id === rulesetId)
       .sort((a, b) => a.weight - b.weight);
 
-    if (currentUserRole === 'manager') {
-      currentRules = currentRules.filter(r => !!r.enabled);
-    }
-
     ruleList.innerHTML = '';
     currentRules.forEach(rule => {
       const li = document.createElement('li');
@@ -503,7 +511,8 @@ document.addEventListener('DOMContentLoaded', () => {
         actionButtons += `<button class="edit-btn" data-rule-id="${rule.id}" title="Editar Regra">✏️</button>`;
       }
       if (canEditParameter()) {
-        if (currentUserRole === 'admin' || hasParams) {
+        // Admin não edita mais parâmetros aqui; gestor pode editar valores se houver params
+        if (currentUserRole === 'manager' && hasParams) {
           actionButtons += `<button class="edit-btn edit-params-btn" data-rule-id="${rule.id}" title="Editar Parâmetros">📝</button>`;
         }
       }
@@ -511,14 +520,16 @@ document.addEventListener('DOMContentLoaded', () => {
         actionButtons += `<button class="delete-btn" data-rule-id="${rule.id}" title="Excluir Regra">🗑️</button>`;
       }
 
-      const toggleMarkup = canToggleRule()
-        ? `<label class="switch">
+      // Mostra toggle inline somente para gestor (admin controla no modal)
+      const toggleMarkup =
+        currentUserRole === 'manager' && canToggleRule()
+          ? `<label class="switch">
             <input type="checkbox" ${
               rule.enabled ? 'checked' : ''
             } data-rule-id="${rule.id}">
             <span class="slider"></span>
           </label>`
-        : '';
+          : '';
 
       li.innerHTML = `
         <div class="rule-info">
@@ -570,12 +581,6 @@ document.addEventListener('DOMContentLoaded', () => {
       checkbox.addEventListener('change', e => {
         const ruleId = parseInt(e.currentTarget.dataset.ruleId, 10);
         const rule = mockData.rules.find(r => r.id === ruleId);
-        if (!canToggleRule()) {
-          if (rule) {
-            e.currentTarget.checked = !!rule.enabled;
-          }
-          return;
-        }
         if (rule) {
           rule.enabled = e.currentTarget.checked ? 1 : 0;
         }
@@ -666,27 +671,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       formGroup.innerHTML = inputHTML;
 
-      if (canEditRule()) {
-        const removeBtn = document.createElement('button');
-        removeBtn.type = 'button';
-        removeBtn.className = 'remove-field-btn';
-        removeBtn.innerHTML = '🗑️ Excluir campo';
-        removeBtn.title = 'Excluir campo';
-        removeBtn.onclick = () => deleteField(field.id, template.id, rule.id);
-        formGroup.appendChild(removeBtn);
-      }
+      // Remoção de campo não ocorre mais aqui.
 
       form.appendChild(formGroup);
     });
 
-    if (canEditRule()) {
-      const addFieldButton = document.createElement('button');
-      addFieldButton.type = 'button';
-      addFieldButton.className = 'btn-add-field';
-      addFieldButton.textContent = '+ Adicionar campo';
-      addFieldButton.onclick = () => showAddFieldForm(ruleId, template.id);
-      form.appendChild(addFieldButton);
-    }
+    // Adição de campo não ocorre mais aqui.
 
     modalBody.appendChild(form);
 
@@ -731,7 +721,7 @@ document.addEventListener('DOMContentLoaded', () => {
         alert(
           'A soma dos percentuais não pode ser maior que 100%. Ajuste os valores.'
         );
-        return; 
+        return;
       }
     }
     inputs.forEach(input => {
@@ -843,7 +833,7 @@ document.addEventListener('DOMContentLoaded', () => {
         name: name.trim(),
         description: description.trim(),
         weight: maxWeight + 1,
-        enabled: 1,
+        enabled: document.getElementById('new-rule-enabled').checked ? 1 : 0,
         ruleset_id: activeRulesetId,
         template_id: templateId,
       });
@@ -856,75 +846,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function showAddFieldForm(ruleId, templateId) {
-    const addFieldDiv = document.createElement('div');
-    addFieldDiv.className = 'add-field-form';
-    addFieldDiv.innerHTML = `
-      <h4>Adicionar novo campo</h4>
-      <div class="form-group">
-        <label for="new-field-name">Nome do campo</label>
-        <input type="text" id="new-field-name" placeholder="Ex: Novo parâmetro">
-      </div>
-      <div class="form-group">
-        <label for="new-field-type">Tipo do campo</label>
-        <select id="new-field-type">
-          <option value="text">Texto</option>
-          <option value="number">Número</option>
-          <option value="boolean">Booleano</option>
-        </select>
-      </div>
-      <div class="form-actions">
-        <button type="button" class="btn-primary" id="confirm-add-field">Adicionar</button>
-        <button type="button" class="btn-secondary" id="cancel-add-field">Cancelar</button>
-      </div>
-    `;
-
-    modalBody.appendChild(addFieldDiv);
-
-    document.getElementById('confirm-add-field').onclick = () => {
-      const fieldName = document.getElementById('new-field-name').value;
-      const fieldType = document.getElementById('new-field-type').value;
-
-      if (!fieldName) {
-        alert('Por favor, informe o nome do campo');
-        return;
-      }
-
-      addNewField(ruleId, templateId, fieldName, fieldType);
-    };
-
-    document.getElementById('cancel-add-field').onclick = () => {
-      addFieldDiv.remove();
-    };
+    // Função obsoleta: gestão de campos migrou para o template.
   }
 
   function addNewField(ruleId, templateId, fieldName, fieldType) {
-    const newFieldId = Math.max(...mockData.fields.map(f => f.id), 0) + 1;
-    const fieldSlug = fieldName.toLowerCase().replace(/\s+/g, '-');
-
-    const newField = {
-      id: newFieldId,
-      name: fieldName,
-      slug: fieldSlug,
-      type: fieldType,
-      template_id: templateId,
-    };
-
-    mockData.fields.push(newField);
-
-    const newParamId = Math.max(...mockData.parameters.map(p => p.id), 0) + 1;
-    const defaultValue = fieldType === 'boolean' ? 'false' : '';
-
-    const newParameter = {
-      id: newParamId,
-      value: defaultValue,
-      rule_id: ruleId,
-      field_id: newFieldId,
-    };
-
-    mockData.parameters.push(newParameter);
-
-    closeModal();
-    setTimeout(() => openEditParametersModal(ruleId), 100);
+    // Função obsoleta: adicionar fields via modal de template.
   }
 
   function renderTemplates() {
@@ -986,6 +912,28 @@ document.addEventListener('DOMContentLoaded', () => {
   function openEditTemplateModal(templateId) {
     const template = mockData.templates.find(t => t.id === templateId);
     modalTitle.textContent = 'Editar Template';
+    const templateFields = mockData.fields.filter(
+      f => f.template_id === template.id
+    );
+    const isAdmin = currentUserRole === 'admin';
+    const fieldsTableRows = templateFields
+      .map(
+        f => `<tr data-field-id="${f.id}">
+          <td>${f.name}</td>
+          <td>${f.slug}</td>
+          <td>${f.type}</td>
+          <td>
+            ${
+              isAdmin
+                ? `<button type="button" class="edit-field-btn" data-field-id="${f.id}" title="Editar">✏️</button>
+                   <button type="button" class="delete-field-btn" data-field-id="${f.id}" title="Remover">🗑️</button>`
+                : ''
+            }
+          </td>
+        </tr>`
+      )
+      .join('');
+
     modalBody.innerHTML = `
       <form id="edit-template-form">
         <div class="form-group">
@@ -995,6 +943,10 @@ document.addEventListener('DOMContentLoaded', () => {
           }" required>
         </div>
         <div class="form-group">
+          <label>Slug</label>
+          <input type="text" value="${template.slug}" disabled>
+        </div>
+        <div class="form-group">
           <label for="template-terminator" class="checkbox-label">
             <input type="checkbox" id="template-terminator" name="terminator" ${
               template.terminator === 1 ? 'checked' : ''
@@ -1002,6 +954,28 @@ document.addEventListener('DOMContentLoaded', () => {
             <span>Terminator</span>
           </label>
         </div>
+        <div class="form-group">
+          <label>Campos (Fields)</label>
+          <table class="fields-table">
+            <thead>
+              <tr><th>Nome</th><th>Slug</th><th>Tipo</th><th>Ações</th></tr>
+            </thead>
+            <tbody>
+              ${
+                fieldsTableRows ||
+                '<tr><td colspan="4">Nenhum campo vinculado</td></tr>'
+              }
+            </tbody>
+          </table>
+        </div>
+        ${
+          isAdmin
+            ? `
+        <div class="form-group">
+          <button type="button" class="btn-primary" id="add-field-btn">+ Adicionar Novo Campo</button>
+        </div>`
+            : ''
+        }
       </form>
     `;
 
@@ -1023,6 +997,217 @@ document.addEventListener('DOMContentLoaded', () => {
       renderTemplates();
     };
     modal.style.display = 'block';
+
+    if (isAdmin) {
+      modalBody.querySelectorAll('.edit-field-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          const fieldId = parseInt(e.currentTarget.dataset.fieldId, 10);
+          openEditFieldModal(templateId, fieldId);
+        });
+      });
+
+      modalBody.querySelectorAll('.delete-field-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          const fieldId = parseInt(e.currentTarget.dataset.fieldId, 10);
+          mockData.parameters = mockData.parameters.filter(
+            p => p.field_id !== fieldId
+          );
+          mockData.fields = mockData.fields.filter(f => f.id !== fieldId);
+          openEditTemplateModal(templateId);
+        });
+      });
+
+      const addFieldBtn = document.getElementById('add-field-btn');
+      if (addFieldBtn) {
+        addFieldBtn.addEventListener('click', () => {
+          openAddFieldModal(templateId);
+        });
+      }
+    }
+  }
+
+  function openAddFieldModal(templateId) {
+    const template = mockData.templates.find(t => t.id === templateId);
+
+    // Criar um segundo modal para não interferir com o modal do template
+    const fieldModalHtml = `
+      <div id="field-modal" class="modal" style="display: block;">
+        <div class="modal-content">
+          <header class="modal-header">
+            <h3>Adicionar Novo Campo</h3>
+            <span class="close-button-field">&times;</span>
+          </header>
+          <div class="modal-body">
+            <form id="add-field-form">
+              <div class="form-group">
+                <label for="field-name">Nome</label>
+                <input type="text" id="field-name" placeholder="Ex: Valor mínimo" required>
+              </div>
+              <div class="form-group">
+                <label for="field-slug">Slug (opcional)</label>
+                <input type="text" id="field-slug" placeholder="Ex: minimum-value">
+              </div>
+              <div class="form-group">
+                <label for="field-type">Tipo</label>
+                <select id="field-type">
+                  <option value="text">Texto</option>
+                  <option value="number">Número</option>
+                  <option value="boolean">Booleano</option>
+                </select>
+              </div>
+            </form>
+          </div>
+          <footer class="modal-footer">
+            <button id="save-field-btn" class="btn-primary">Salvar</button>
+            <button id="cancel-field-btn" class="btn-secondary">Cancelar</button>
+          </footer>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', fieldModalHtml);
+    const fieldModal = document.getElementById('field-modal');
+    const closeBtn = fieldModal.querySelector('.close-button-field');
+    const saveBtn = document.getElementById('save-field-btn');
+    const cancelBtn = document.getElementById('cancel-field-btn');
+
+    const closeFieldModal = () => {
+      fieldModal.remove();
+    };
+
+    closeBtn.addEventListener('click', closeFieldModal);
+    cancelBtn.addEventListener('click', closeFieldModal);
+
+    saveBtn.addEventListener('click', () => {
+      const fieldName = document.getElementById('field-name').value.trim();
+      const fieldSlugInput = document.getElementById('field-slug').value.trim();
+      const fieldType = document.getElementById('field-type').value;
+
+      if (!fieldName) {
+        alert('Informe o nome do campo');
+        return;
+      }
+
+      const newFieldId = Math.max(...mockData.fields.map(f => f.id), 0) + 1;
+      const slugCandidate =
+        fieldSlugInput || fieldName.toLowerCase().replace(/\s+/g, '-');
+
+      mockData.fields.push({
+        id: newFieldId,
+        name: fieldName,
+        slug: slugCandidate,
+        type: fieldType,
+        template_id: template.id,
+      });
+
+      // Cria parâmetros default para cada regra existente que utiliza o template
+      mockData.rules
+        .filter(r => r.template_id === template.id)
+        .forEach(r => {
+          const newParamId =
+            Math.max(...mockData.parameters.map(p => p.id), 0) + 1;
+          mockData.parameters.push({
+            id: newParamId,
+            value: fieldType === 'boolean' ? 'false' : '',
+            rule_id: r.id,
+            field_id: newFieldId,
+          });
+        });
+
+      closeFieldModal();
+      openEditTemplateModal(templateId);
+    });
+
+    fieldModal.addEventListener('click', e => {
+      if (e.target === fieldModal) {
+        closeFieldModal();
+      }
+    });
+  }
+
+  function openEditFieldModal(templateId, fieldId) {
+    const field = mockData.fields.find(f => f.id === fieldId);
+    if (!field) return;
+
+    const fieldModalHtml = `
+      <div id="field-modal" class="modal" style="display: block;">
+        <div class="modal-content">
+          <header class="modal-header">
+            <h3>Editar Campo</h3>
+            <span class="close-button-field">&times;</span>
+          </header>
+          <div class="modal-body">
+            <form id="edit-field-form">
+              <div class="form-group">
+                <label for="field-name">Nome</label>
+                <input type="text" id="field-name" value="${
+                  field.name
+                }" required>
+              </div>
+              <div class="form-group">
+                <label for="field-slug">Slug</label>
+                <input type="text" id="field-slug" value="${field.slug}">
+              </div>
+              <div class="form-group">
+                <label for="field-type">Tipo</label>
+                <select id="field-type">
+                  <option value="text" ${
+                    field.type === 'text' ? 'selected' : ''
+                  }>Texto</option>
+                  <option value="number" ${
+                    field.type === 'number' ? 'selected' : ''
+                  }>Número</option>
+                  <option value="boolean" ${
+                    field.type === 'boolean' ? 'selected' : ''
+                  }>Booleano</option>
+                </select>
+              </div>
+            </form>
+          </div>
+          <footer class="modal-footer">
+            <button id="save-field-btn" class="btn-primary">Salvar</button>
+            <button id="cancel-field-btn" class="btn-secondary">Cancelar</button>
+          </footer>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', fieldModalHtml);
+    const fieldModal = document.getElementById('field-modal');
+    const closeBtn = fieldModal.querySelector('.close-button-field');
+    const saveBtn = document.getElementById('save-field-btn');
+    const cancelBtn = document.getElementById('cancel-field-btn');
+
+    const closeFieldModal = () => {
+      fieldModal.remove();
+    };
+
+    closeBtn.addEventListener('click', closeFieldModal);
+    cancelBtn.addEventListener('click', closeFieldModal);
+
+    saveBtn.addEventListener('click', () => {
+      const fieldName = document.getElementById('field-name').value.trim();
+      const fieldSlug = document.getElementById('field-slug').value.trim();
+      const fieldType = document.getElementById('field-type').value;
+
+      if (!fieldName) {
+        alert('Informe o nome do campo');
+        return;
+      }
+
+      field.name = fieldName;
+      field.slug = fieldSlug || fieldName.toLowerCase().replace(/\s+/g, '-');
+      field.type = fieldType;
+
+      closeFieldModal();
+      openEditTemplateModal(templateId);
+    });
+
+    fieldModal.addEventListener('click', e => {
+      if (e.target === fieldModal) {
+        closeFieldModal();
+      }
+    });
   }
 
   function openCreateTemplateModal() {
@@ -1032,6 +1217,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="form-group">
           <label for="new-template-name">Nome</label>
           <input type="text" id="new-template-name" name="name" required>
+        </div>
+        <div class="form-group">
+          <label for="new-template-slug">Slug (opcional)</label>
+          <input type="text" id="new-template-slug" name="slug" placeholder="ex: save-opportunity">
         </div>
         <div class="form-group">
           <label for="new-template-terminator" class="checkbox-label">
@@ -1060,10 +1249,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isTerminator) {
         mockData.templates.forEach(t => (t.terminator = 0));
       }
+      const providedSlug = document
+        .getElementById('new-template-slug')
+        .value.trim();
       mockData.templates.push({
         id: newId,
         name: name.trim(),
-        slug: name.toLowerCase().replace(/\s+/g, '-'),
+        slug: providedSlug || name.toLowerCase().replace(/\s+/g, '-'),
         terminator: isTerminator ? 1 : 0,
       });
 
