@@ -531,9 +531,19 @@ document.addEventListener('DOMContentLoaded', () => {
           </label>`
           : '';
 
+      // Tag de status visível apenas para admin
+      const statusTag =
+        currentUserRole === 'admin'
+          ? `<span class="rule-status-tag ${
+              rule.enabled ? 'active' : 'inactive'
+            }">
+              ${rule.enabled ? 'Ativa' : 'Inativa'}
+            </span>`
+          : '';
+
       li.innerHTML = `
         <div class="rule-info">
-          <h4>${rule.name}</h4>
+          <h4>${rule.name}${statusTag}</h4>
           <p>${rule.description}</p>
         </div>
         <div class="rule-actions">
@@ -596,11 +606,23 @@ document.addEventListener('DOMContentLoaded', () => {
       <form id="edit-rule-form">
         <div class="form-group">
           <label for="rule-name">Nome</label>
-          <input type="text" id="rule-name" name="name" value="${rule.name}" required>
+          <input type="text" id="rule-name" name="name" value="${
+            rule.name
+          }" required>
         </div>
         <div class="form-group">
           <label for="rule-description">Descrição</label>
-          <textarea id="rule-description" name="description">${rule.description}</textarea>
+          <textarea id="rule-description" name="description">${
+            rule.description
+          }</textarea>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="edit-rule-enabled" name="enabled" ${
+              rule.enabled ? 'checked' : ''
+            }>
+            <span>Regra ativa</span>
+          </label>
         </div>
       </form>
     `;
@@ -611,6 +633,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const formData = new FormData(form);
       rule.name = formData.get('name');
       rule.description = formData.get('description');
+      rule.enabled = document.getElementById('edit-rule-enabled').checked
+        ? 1
+        : 0;
       closeModal();
       const activeRulesetId = parseInt(
         document.querySelector('#ruleset-list li.active')?.dataset.id,
@@ -833,7 +858,7 @@ document.addEventListener('DOMContentLoaded', () => {
         name: name.trim(),
         description: description.trim(),
         weight: maxWeight + 1,
-        enabled: document.getElementById('new-rule-enabled').checked ? 1 : 0,
+        enabled: 1,
         ruleset_id: activeRulesetId,
         template_id: templateId,
       });
