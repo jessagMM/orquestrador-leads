@@ -893,7 +893,6 @@ main {
   flex-grow: 1;
 }
 
-/* Tabela de fields dentro do modal de template */
 .fields-table {
   width: 100%;
   border-collapse: collapse;

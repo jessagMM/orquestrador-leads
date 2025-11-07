@@ -260,7 +260,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function canToggleRule() {
-    // Gestor também pode ativar/desativar regra
     return currentUserRole === 'admin' || currentUserRole === 'manager';
   }
 
@@ -508,11 +507,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
       let actionButtons = '';
       if (canEditRule()) {
-        actionButtons += `<button class="edit-btn" data-rule-id="${rule.id}" title="Editar Regra">✏️</button>`;
+        actionButtons += `<button class="edit-btn edit-rule-btn" data-rule-id="${rule.id}" title="Editar Regra">✏️</button>`;
       }
       if (canEditParameter()) {
-        // Admin não edita mais parâmetros aqui; gestor pode editar valores se houver params
-        if (currentUserRole === 'manager' && hasParams) {
+        if (currentUserRole === 'manager' && hasParams && rule.enabled) {
           actionButtons += `<button class="edit-btn edit-params-btn" data-rule-id="${rule.id}" title="Editar Parâmetros">📝</button>`;
         }
       }
@@ -520,7 +518,6 @@ document.addEventListener('DOMContentLoaded', () => {
         actionButtons += `<button class="delete-btn" data-rule-id="${rule.id}" title="Excluir Regra">🗑️</button>`;
       }
 
-      // Mostra toggle inline somente para gestor (admin controla no modal)
       const toggleMarkup =
         currentUserRole === 'manager' && canToggleRule()
           ? `<label class="switch">
@@ -531,7 +528,6 @@ document.addEventListener('DOMContentLoaded', () => {
           </label>`
           : '';
 
-      // Tag de status visível apenas para admin
       const statusTag =
         currentUserRole === 'admin'
           ? `<span class="rule-status-tag ${
@@ -562,7 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function addRuleActionListeners() {
-    document.querySelectorAll('.edit-btn').forEach(button => {
+    document.querySelectorAll('.edit-rule-btn').forEach(button => {
       button.addEventListener('click', e => {
         const ruleId = parseInt(e.currentTarget.dataset.ruleId, 10);
         openEditRuleModal(ruleId);
@@ -599,9 +595,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function openEditRuleModal(ruleId) {
+    if (currentUserRole !== 'admin') {
+      alert('Apenas administradores podem editar a regra.');
+      return;
+    }
     const rule = mockData.rules.find(r => r.id === ruleId);
 
     modalTitle.textContent = `Editar Regra: ${rule.name}`;
+    const isAdmin = currentUserRole === 'admin';
     modalBody.innerHTML = `
       <form id="edit-rule-form">
         <div class="form-group">
@@ -616,14 +617,18 @@ document.addEventListener('DOMContentLoaded', () => {
             rule.description
           }</textarea>
         </div>
-        <div class="form-group">
+        ${
+          isAdmin
+            ? `<div class="form-group">
           <label class="checkbox-label">
             <input type="checkbox" id="edit-rule-enabled" name="enabled" ${
               rule.enabled ? 'checked' : ''
             }>
             <span>Regra ativa</span>
           </label>
-        </div>
+        </div>`
+            : ''
+        }
       </form>
     `;
 
@@ -633,9 +638,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const formData = new FormData(form);
       rule.name = formData.get('name');
       rule.description = formData.get('description');
-      rule.enabled = document.getElementById('edit-rule-enabled').checked
-        ? 1
-        : 0;
+      const enabledCheckbox = document.getElementById('edit-rule-enabled');
+      if (enabledCheckbox) {
+        rule.enabled = enabledCheckbox.checked ? 1 : 0;
+      }
       closeModal();
       const activeRulesetId = parseInt(
         document.querySelector('#ruleset-list li.active')?.dataset.id,
@@ -648,6 +654,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function openEditParametersModal(ruleId) {
     const rule = mockData.rules.find(r => r.id === ruleId);
+
+    if (currentUserRole === 'manager' && !rule.enabled) {
+      alert('Não é possível editar parâmetros de uma regra inativa.');
+      return;
+    }
+
     const template = mockData.templates.find(t => t.id === rule.template_id);
     const fields = mockData.fields.filter(f => f.template_id === template.id);
 
@@ -696,12 +708,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       formGroup.innerHTML = inputHTML;
 
-      // Remoção de campo não ocorre mais aqui.
-
       form.appendChild(formGroup);
     });
-
-    // Adição de campo não ocorre mais aqui.
 
     modalBody.appendChild(form);
 
@@ -870,14 +878,6 @@ document.addEventListener('DOMContentLoaded', () => {
     modal.style.display = 'block';
   }
 
-  function showAddFieldForm(ruleId, templateId) {
-    // Função obsoleta: gestão de campos migrou para o template.
-  }
-
-  function addNewField(ruleId, templateId, fieldName, fieldType) {
-    // Função obsoleta: adicionar fields via modal de template.
-  }
-
   function renderTemplates() {
     if (currentUserRole === 'manager') {
       templateList.innerHTML = '';
@@ -1005,13 +1005,48 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
 
     saveParamsBtn.textContent = 'Salvar';
+    const terminatorCheckbox = document.getElementById('template-terminator');
+
+    terminatorCheckbox.addEventListener('change', e => {
+      const currentlyChecked = e.target.checked;
+      if (!currentlyChecked) {
+        const currentTerminators = mockData.templates.filter(
+          t => t.terminator === 1
+        );
+        const isOnlyCurrent =
+          currentTerminators.length === 1 &&
+          currentTerminators[0].id === template.id;
+        if (isOnlyCurrent) {
+          alert(
+            'Deve haver ao menos um terminator. Selecione outro template e ative-o como terminator.'
+          );
+          e.target.checked = true;
+        }
+      }
+    });
+
     saveParamsBtn.onclick = () => {
       const form = document.getElementById('edit-template-form');
       const formData = new FormData(form);
       template.name = formData.get('name');
-      const markAsTerminator = document.getElementById(
-        'template-terminator'
-      ).checked;
+      const markAsTerminator = terminatorCheckbox.checked;
+
+      if (!markAsTerminator) {
+        const currentTerminators = mockData.templates.filter(
+          t => t.terminator === 1
+        );
+        const isOnlyCurrent =
+          currentTerminators.length === 1 &&
+          currentTerminators[0].id === template.id;
+        if (isOnlyCurrent) {
+          alert(
+            'Deve haver ao menos um terminator. Não é possível desmarcar este.'
+          );
+          terminatorCheckbox.checked = true;
+          return;
+        }
+      }
+
       if (markAsTerminator) {
         mockData.templates.forEach(t => (t.terminator = 0));
         template.terminator = 1;
@@ -1054,7 +1089,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function openAddFieldModal(templateId) {
     const template = mockData.templates.find(t => t.id === templateId);
 
-    // Criar um segundo modal para não interferir com o modal do template
     const fieldModalHtml = `
       <div id="field-modal" class="modal" style="display: block;">
         <div class="modal-content">
@@ -1125,7 +1159,6 @@ document.addEventListener('DOMContentLoaded', () => {
         template_id: template.id,
       });
 
-      // Cria parâmetros default para cada regra existente que utiliza o template
       mockData.rules
         .filter(r => r.template_id === template.id)
         .forEach(r => {
@@ -1171,7 +1204,9 @@ document.addEventListener('DOMContentLoaded', () => {
               </div>
               <div class="form-group">
                 <label for="field-slug">Slug</label>
-                <input type="text" id="field-slug" value="${field.slug}">
+                <input type="text" id="field-slug" value="${
+                  field.slug
+                }" disabled title="Slug não é editável">
               </div>
               <div class="form-group">
                 <label for="field-type">Tipo</label>
@@ -1212,7 +1247,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     saveBtn.addEventListener('click', () => {
       const fieldName = document.getElementById('field-name').value.trim();
-      const fieldSlug = document.getElementById('field-slug').value.trim();
       const fieldType = document.getElementById('field-type').value;
 
       if (!fieldName) {
@@ -1221,7 +1255,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       field.name = fieldName;
-      field.slug = fieldSlug || fieldName.toLowerCase().replace(/\s+/g, '-');
       field.type = fieldType;
 
       closeFieldModal();
